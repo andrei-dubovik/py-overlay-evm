@@ -77,7 +77,7 @@ if __name__ == '__main__':
     # Check that the deposit operation was successful
     x, _, _ = balanceOf(
         mkcall(ch2, holder, wbnb, 0),
-        holder,
+        address = holder,
     )
     print(f'WBNB balance: {x/10**18}')
 
@@ -89,40 +89,40 @@ if __name__ == '__main__':
     # Estimate amount to be received
     x, _, _ = getAmountOut(
         mkcall(ch2, holder, router, 0),
-        amount,
-        reserve0,
-        reserve1,
+        amountIn = amount,
+        reserveIn = reserve0,
+        reserveOut = reserve1,
     )
     print(f'BUSD amount out: {x/10**18}')
 
     # Approve withdrawl of 100 WBNB
     _, ch3, _ = approve(
         mkcall(ch2, holder, wbnb, 0),
-        router,
-        amount,
+        guy = router,
+        wad = amount,
     )
 
     # Exchange 100 WBNB to BUSD; save the trace
     _, ch4, trace = swapExactTokensForTokens(
         mkcall(ch3, holder, router, 0, trace=True),
-        amount,
-        0,
-        [wbnb, busd],
-        holder,
-        timestamp + 60,
+        amountIn = amount,
+        amountOutMin = 0,
+        path = [wbnb, busd],
+        to = holder,
+        deadline = timestamp + 60,
     )
     save_trace(trace, 'swap.trace')
 
     # Check final WBNB balance
     x, _, _ = balanceOf(
         mkcall(ch4, holder, wbnb, 0),
-        holder,
+        address = holder,
     )
     print(f'WBNB balance: {x/10**18}')
     
     # Check final BUSD balance
     x, _, _ = balanceOf(
         mkcall(ch4, holder, busd, 0),
-        holder,
+        address = holder,
     )
     print(f'BUSD balance: {x/10**18}')

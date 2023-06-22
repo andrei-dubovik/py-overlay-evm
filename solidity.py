@@ -317,10 +317,13 @@ def solidity(func: Callable) -> Callable:
     """Wrap a call to a Solidity contract into a Python function."""
     solsig = signature(func)
     sig = inspect.signature(func)
+    argnames = tuple(sig.parameters.keys())
     argtypes = tuple(p.annotation for p in sig.parameters.values())
     rtype = sig.return_annotation
-    def wrapped(f, *args):
-        data = solsig + encode(tuple[argtypes], args)
+    def wrapped(f, *args, **kwargs):
+        f_kwargs = dict(zip(argnames, args), **kwargs)
+        f_args = [f_kwargs[k] for k in argnames]
+        data = solsig + encode(tuple[argtypes], f_args)
         rslt, chain, trace = f(data)
         if int(rslt) == 0:
             raise rslt
