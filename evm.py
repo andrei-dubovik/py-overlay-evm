@@ -11,7 +11,7 @@ from rpc import Node
 
 
 OPCODES: dict[int, Callable[..., int]] = {}
-MOD = 2**256
+MOD = 1 << 256
 
 Pc = list[int]
 
@@ -230,6 +230,11 @@ def uint(x: int) -> int:
     return x + MOD if x < 0 else x
 
 
+def cmpl(size: int) -> int:
+    """Compute a 256-bit integer with a given number of leading 1s."""
+    return (1 << size) - 1 << 256 - size
+
+
 def memcpy(
         dst: bytearray,
         src: bytes,
@@ -367,9 +372,36 @@ def mod(s: Space, pc: Pc, a: int, b: int) -> int:
     return a%b
 
 
+@register(0x7)
+def smod(s: Space, pc: Pc, a: int, b: int) -> int:
+    a = sint(a)
+    b = sint(b)
+    return uint(abs(a)%abs(b)*(1 if a >= 0 else -1))
+
+
+@register(0x8)
+def addmod(s: Space, pc: Pc, a: int, b: int, N: int) -> int:
+    return (a + b)%N
+
+
+@register(0x9)
+def mulmod(s: Space, pc: Pc, a: int, b: int, N: int) -> int:
+    return (a*b)%N
+
+
 @register(0xa)
 def exp(s: Space, pc: Pc, a: int, b: int) -> int:
     return pow(a, b, MOD)
+
+
+@register(0xb)
+def signextend(s: Space, pc: Pc, b: int, x: int) -> int:
+    size = 8*(b + 1)
+    x &= (1 << size) - 1
+    if x >> size - 1 == 0:
+        return x
+    else:
+        return x | cmpl(256 - size)
 
 
 @register(0x10)
@@ -380,6 +412,16 @@ def lt(s: Space, pc: Pc, a: int, b: int) -> int:
 @register(0x11)
 def gt(s: Space, pc: Pc, a: int, b: int) -> int:
     return int(a > b)
+
+
+@register(0x12)
+def slt(s: Space, pc: Pc, a: int, b: int) -> int:
+    return int(sint(a) < sint(b))
+
+
+@register(0x13)
+def sgt(s: Space, pc: Pc, a: int, b: int) -> int:
+    return int(sint(a) > sint(b))
 
 
 @register(0x14)
@@ -402,6 +444,11 @@ def bitwise_or(s: Space, pc: Pc, a: int, b: int) -> int:
     return a | b
 
 
+@register(0x18)
+def bitwise_xor(s: Space, pc: Pc, a: int, b: int) -> int:
+    return a ^ b
+
+
 @register(0x19)
 def bitwise_not(s: Space, pc: Pc, a: int) -> int:
     return a ^ (MOD - 1)
@@ -421,6 +468,14 @@ def shl(s: Space, pc: Pc, shift: int, value: int) -> int:
 @register(0x1c)
 def shr(s: Space, pc: Pc, shift: int, value: int) -> int:
     return value >> shift
+
+
+@register(0x1d)
+def sar(s: Space, pc: Pc, shift: int, value: int) -> int:
+    if value >> 255 == 0:
+        return value >> shift
+    else:
+        return value >> shift | cmpl(shift)
 
 
 @register(0x30)
