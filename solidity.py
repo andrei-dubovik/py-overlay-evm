@@ -10,6 +10,7 @@ import typing
 
 # Load local packages
 from keccak import keccak
+from evm import sint, uint
 
 # Define fixed generic arrays. This is done in a roundabout way as Python does
 # not support generic containers of fixed length out of the box.
@@ -118,6 +119,25 @@ def _(_cls: Any, value: int) -> bytes:
 @decode.register(uint{M})
 def _(_cls: Any, value: bytes) -> int:
     return int.from_bytes(value[:32], 'big')
+"""
+    exec(code)
+
+
+# int<M> (no overflow checks)
+for M in range(8, 257, 8):
+    code = f"""
+class int{M}:
+    pass
+
+
+@encode.register(int{M})
+def _(_cls: Any, value: int) -> bytes:
+    return uint(value).to_bytes(32, 'big')
+
+
+@decode.register(int{M})
+def _(_cls: Any, value: bytes) -> int:
+    return sint(int.from_bytes(value[:32], 'big'))
 """
     exec(code)
 
