@@ -19,35 +19,33 @@ Pc = list[int]
 class Result(ABC, BaseException):
     """A prototype for the result of a contract execution."""
 
-    @abstractmethod
     def __repr__(self) -> str:
-        pass
+        return type(self).__name__ + '()'
 
     @abstractmethod
     def __int__(self) -> int:
         pass
 
-    @abstractmethod
     def data(self) -> bytes:
         """Return associated data."""
-        pass
+        return b''
 
     def __str__(self) -> str:
         return self.__repr__()
 
 
+class InsufficientFunds(Result):
+    """A funds transfer failed due to insufficient funds."""
+
+    def __int__(self) -> int:
+        return 0
+
+
 class Stop(Result):
     """A contract stopped normally without returning any data."""
 
-    def __repr__(self) -> str:
-        return 'Stop()'
-
     def __int__(self) -> int:
         return 1
-
-    def data(self) -> bytes:
-        """Return associated data."""
-        return b''
 
 
 class Return(Result):
@@ -122,6 +120,18 @@ class Storage:
         return s
 
 
+class Balance:
+    """A funds balance on a smart contract."""
+
+    def __get__(self, obj: Any, _: Any) -> int:
+        return 0 if obj is None else obj._balance
+
+    def __set__(self, obj: Any, value: int) -> None:
+        if value < 0:
+            raise InsufficientFunds()
+        obj._balance = value
+
+
 @dataclass
 class Contract:
     """An Ethereum smart contract."""
@@ -129,6 +139,7 @@ class Contract:
     address: int
     code: bytes
     storage: Storage
+    balance: Balance = Balance()
 
     def clone(self) -> "Contract":
         """Make a clone with own storage."""
@@ -136,6 +147,7 @@ class Contract:
             self.address,
             self.code,
             self.storage.clone(),
+            self.balance,
         )
 
 
@@ -156,7 +168,8 @@ class Chain:
         if address not in self.cache:
             code = self.node.eth_getCode(hex(address))
             storage = Storage(self.node, hex(address))
-            contract = Contract(address, code, storage)
+            balance = self.node.eth_getBalance(hex(address))
+            contract = Contract(address, code, storage, balance)
             self.cache[address] = contract
         if address not in self.storage:
             self.storage[address] = self.cache[address].clone()
@@ -169,6 +182,11 @@ class Chain:
         chain.cache = self.cache
         chain.storage = {a: c.clone() for a,c in self.storage.items()}
         return chain
+
+    def transfer(self, src: int, dst: int, value: int) -> None:
+        """Transfer funds between addresses."""
+        self[src].balance -= value
+        self[dst].balance += value
 
 
 @dataclass
@@ -260,6 +278,7 @@ def execute(
     )
     pc = [0]
     try:
+        space.chain.transfer(caller, address, value)
         while True:
             opcode = contract.code[pc[0]]
             pc[0] += 1
@@ -409,6 +428,11 @@ def address(s: Space, pc: Pc) -> int:
     return s.address
 
 
+@register(0x31)
+def balance(s: Space, pc: Pc, address: int) -> int:
+    return s.chain[address].balance
+
+
 @register(0x33)
 def caller(s: Space, pc: Pc) -> int:
     return s.msg['caller']
@@ -460,6 +484,11 @@ def returndatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int)
 @register(0x42)
 def timestamp(s: Space, pc: Pc) -> int:
     return s.chain.node.block_timestamp()
+
+
+@register(0x47)
+def selfbalance(s: Space, pc: Pc) -> int:
+    return s.chain[s.address].balance
 
 
 @register(0x50)

@@ -60,8 +60,13 @@ class Node:
         """Get the timestamp associated with the frozen block number."""
         return int(self.timestamp, 16)
 
+    def eth_getBalance(self, address: str) -> int:
+        """Get the balance at the given address."""
+        balance = self.query('eth_getBalance', [address, self.block])
+        return int(balance, 16)
+
     def eth_getCode(self, address: str) -> bytes:
-        """Get contract code at given address."""
+        """Get the contract code at the given address."""
         code = self.query('eth_getCode', [address, self.block])
         return binascii.a2b_hex(code[2:])
 

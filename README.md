@@ -210,7 +210,10 @@ holder = int("0xabababababababababababababababababababab", 16)
 url = "https://bsc-dataseed1.binance.org/"
 chain = Chain(Node(url, verbose=True))
 
-## Deposit 100 BNB to a mock address
+## Create an unlimited supply of BNB at the mock address
+chain[holder].balance = (1 << 256) - 1
+
+## Deposit 100 BNB to WBNB
 amount = 100_000000000000000000
 _, ch2, _ = deposit(
     mkcall(chain, holder, wbnb, amount),
