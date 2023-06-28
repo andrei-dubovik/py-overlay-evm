@@ -278,6 +278,8 @@ print(f'BUSD balance: {x/10**18}')
 In case I happen to have time to further work on this project, the overall roadmap is as follows:
 - [ ] Gas calculations
 - [ ] Full coverage of EVM bytecodes (possibly using stab implementations)
+- [ ] Tests for EVM bytecodes
 - [ ] Full coverage of Solidity datatypes
+- [ ] Tests for Solidity datatypes
 - [ ] Python package
 - [ ] Documentation
