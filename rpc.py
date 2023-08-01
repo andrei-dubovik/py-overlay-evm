@@ -60,17 +60,21 @@ class Node:
         """Get the timestamp associated with the frozen block number."""
         return int(self.timestamp, 16)
 
-    def eth_getBalance(self, address: str) -> int:
+    def eth_getBalance(self, address: int) -> int:
         """Get the balance at the given address."""
-        balance = self.query('eth_getBalance', [address, self.block])
+        xaddr = f'0x{address:040x}'
+        balance = self.query('eth_getBalance', [xaddr, self.block])
         return int(balance, 16)
 
-    def eth_getCode(self, address: str) -> bytes:
+    def eth_getCode(self, address: int) -> bytes:
         """Get the contract code at the given address."""
-        code = self.query('eth_getCode', [address, self.block])
+        xaddr = f'0x{address:040x}'
+        code = self.query('eth_getCode', [xaddr, self.block])
         return binascii.a2b_hex(code[2:])
 
-    def eth_getStorageAt(self, address: str, position: int) -> int:
+    def eth_getStorageAt(self, address: int, position: int) -> int:
         """Get contract storage at given address and position."""
-        value = self.query('eth_getStorageAt', [address, hex(position), self.block])
+        xaddr = f'0x{address:040x}'
+        xpos = hex(position)
+        value = self.query('eth_getStorageAt', [xaddr, xpos, self.block])
         return int(value, 16)

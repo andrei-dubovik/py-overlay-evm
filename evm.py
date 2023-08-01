@@ -90,11 +90,11 @@ class Storage:
     """An overlay storage for smart contracts."""
 
     node: Node 
-    address: str
+    address: int
     cache: dict[int, int]
     storage: dict[int, int]
 
-    def __init__(self, node: Node, address: str) -> None:
+    def __init__(self, node: Node, address: int) -> None:
         self.node = node
         self.address = address
         self.cache = {}
@@ -166,9 +166,9 @@ class Chain:
     def __getitem__(self, address: int) -> Contract:
         """Get contract code and contract storage."""
         if address not in self.cache:
-            code = self.node.eth_getCode(hex(address))
-            storage = Storage(self.node, hex(address))
-            balance = self.node.eth_getBalance(hex(address))
+            code = self.node.eth_getCode(address)
+            storage = Storage(self.node, address)
+            balance = self.node.eth_getBalance(address)
             contract = Contract(address, code, storage, balance)
             self.cache[address] = contract
         if address not in self.storage:
