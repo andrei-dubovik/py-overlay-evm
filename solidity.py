@@ -2,6 +2,7 @@
 
 # Load standard packages
 from collections.abc import Callable
+from dataclasses import dataclass
 from types import FunctionType
 from typing import Any, Generic, TypeVar
 import inspect
@@ -11,6 +12,7 @@ import typing
 # Load local packages
 from keccak import keccak
 from evm import sint, uint
+import evm
 
 # Define fixed generic arrays. This is done in a roundabout way as Python does
 # not support generic containers of fixed length out of the box.
@@ -332,6 +334,21 @@ def _(func: Callable) -> bytes:
     return keccak(solsig)[:4]
 
 
+@dataclass
+class CallResult(evm.CallResult):
+    """A full result of a contract call, including the new chain state."""
+
+    value: Any
+
+    def __repr__(self) -> str:
+        """Pretty-print the object for interactive debugging."""
+        return 'CallResult(%s, %s, %s, %s)' % (
+            'signal=%s(...)' % type(self.signal).__name__,
+            'value=%s' % repr(self.value),
+            'chain=...',
+            'trace=%s' % ('None' if self.trace is None else '[...]'),
+        )
+
 # Solidity wrapper
 def solidity(func: Callable) -> Callable:
     """Wrap a call to a Solidity contract into a Python function."""
@@ -344,15 +361,15 @@ def solidity(func: Callable) -> Callable:
         f_kwargs = dict(zip(argnames, args), **kwargs)
         f_args = [f_kwargs[k] for k in argnames]
         data = solsig + encode(tuple[argtypes], f_args)
-        rslt, chain, trace = f(data)
+        rslt = f(data)
         if int(rslt) == 0:
             raise rslt
         if rtype is None or rtype == inspect.Signature.empty:
-            rslt = None
+            value = None
         elif fo_type(rtype) == tuple:
-            rslt = decode(rtype, rslt.data())
+            value = decode(rtype, rslt.data)
         else:
             # Unwrap single-valued tuples
-            rslt = decode(tuple[rtype], rslt.data())[0]
-        return rslt, chain, trace
+            value = decode(tuple[rtype], rslt.data)[0]
+        return CallResult(rslt.signal, rslt.chain, rslt.trace, value)
     return wrapped

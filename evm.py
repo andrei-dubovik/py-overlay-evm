@@ -16,71 +16,40 @@ MOD = 1 << 256
 Pc = list[int]
 
 
-class Result(ABC, BaseException):
-    """A prototype for the result of a contract execution."""
+@dataclass
+class Signal(ABC, BaseException):
+    """A prototype for the base result of a contract call."""
 
-    def __repr__(self) -> str:
-        return type(self).__name__ + '()'
+    data: bytes = b''
 
     @abstractmethod
     def __int__(self) -> int:
         pass
 
-    def data(self) -> bytes:
-        """Return associated data."""
-        return b''
 
-    def __str__(self) -> str:
-        return self.__repr__()
-
-
-class InsufficientFunds(Result):
+class InsufficientFunds(Signal):
     """A funds transfer failed due to insufficient funds."""
 
     def __int__(self) -> int:
         return 0
 
 
-class Stop(Result):
+class Stop(Signal):
     """A contract stopped normally without returning any data."""
 
     def __int__(self) -> int:
         return 1
 
 
-class Return(Result):
+class Return(Signal):
     """A contract stopped normally and returned some data."""
-
-    _data: bytes
-
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-
-    def __repr__(self) -> str:
-        return f'Return({repr(self._data)})'
-
-    def data(self) -> bytes:
-        """Return associated data."""
-        return self._data
 
     def __int__(self) -> int:
         return 1
 
 
-class Revert(Result):
+class Revert(Signal):
     """A contract encountered an error and the call stack was reverted."""
-
-    _data: bytes
-
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-
-    def __repr__(self) -> str:
-        return f'Revert({repr(self._data)})'
-
-    def data(self) -> bytes:
-        """Return associated data."""
-        return self._data
 
     def __int__(self) -> int:
         return 0
@@ -220,6 +189,35 @@ class Space:
     trace: Trace
 
 
+@dataclass
+class CallResult(BaseException):
+    """A full result of a contract call, including the new chain state."""
+
+    signal: Signal
+    chain: Chain
+    trace: Trace
+
+    @property
+    def data(self) -> bytes:
+        return self.signal.data
+
+    def __int__(self) -> int:
+        return int(self.signal)
+
+    def __repr__(self) -> str:
+        """Pretty-print the object for interactive debugging."""
+        return 'CallResult(%s, %s, %s, %s)' % (
+            'signal=%s(...)' % type(self.signal).__name__,
+            'data=%s' % repr(self.data),
+            'chain=...',
+            'trace=%s' % ('None' if self.trace is None else '[...]'),
+        )
+
+    def __str__(self) -> str:
+        """Pretty-print the object for exception messages."""
+        return 'signal=%s' % repr(self.signal)
+
+
 def sint(x: int) -> int:
     """Convert unsigned integer to signed integer."""
     return x - (x >> 255)*MOD
@@ -263,7 +261,7 @@ def execute(
         data: bytes,
         static = False,
         trace = False,
-    ) -> tuple[Result, Chain, Trace]:
+    ) -> CallResult:
     """Run an Ethereum contract in a virtual machine."""
     contract = chain[address]
     space = Space(
@@ -288,9 +286,11 @@ def execute(
             opcode = contract.code[pc[0]]
             pc[0] += 1
             OPCODES[opcode](space, pc)
-    except Result as rslt:
-        chain = space.chain if int(rslt) == 1 else chain
-        return rslt, chain, space.trace
+    except Signal as signal:
+        if int(signal) == 0:
+            raise CallResult(signal, chain, space.trace) from None
+        else:
+            return CallResult(signal, space.chain, space.trace)
 
 
 def mkcall(
@@ -300,7 +300,7 @@ def mkcall(
         value: int,
         static=False,
         trace=False,
-    ) -> Callable[[bytes], tuple[Result, Chain, Trace]]:
+    ) -> Callable[[bytes], CallResult]:
     """Prepare a call that accepts arbibrary data."""
     return lambda data: execute(chain, caller, address, value, data, static, trace)
 
@@ -719,15 +719,18 @@ def generic_call(
         ret_length: int,
     ) -> int:
     data = s.memory[args_offset:args_offset+args_length]
-    result, chain, trace = execute(
-        s.chain, s.address, addr, value, data, static, s.trace is not None,
-    )
-    memcpy(s.memory, result.data(), ret_offset, 0, ret_length)
-    s.returndata = result.data()
-    s.chain = chain
+    try:
+        rslt = execute(
+            s.chain, s.address, addr, value, data, static, s.trace is not None,
+        )
+    except CallResult as err:
+        rslt = err
+    memcpy(s.memory, rslt.data, ret_offset, 0, ret_length)
+    s.returndata = rslt.data
+    s.chain = rslt.chain
     if s.trace is not None:
-        s.trace.append(trace)
-    return int(result)
+        s.trace.append(rslt.trace)
+    return int(rslt)
 
 
 @register(0xf1)

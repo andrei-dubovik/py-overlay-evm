@@ -46,7 +46,7 @@ caller = int("0xabababababababababababababababababababab", 16)
 # signature of "name()", take its first 4 bytes and pass it as the byte input
 # to the contract.
 data = keccak(b'name()')[:4]
-result, chain2, trace = execute(
+rslt = execute(
     chain = chain,
     caller = caller,
     address = wbnb,
@@ -55,28 +55,31 @@ result, chain2, trace = execute(
     trace = True,
 )
 
-# `result` contains the string "Wrapped BNB" encoded according to the Solidity
-# ABI
-print(result)
-# Return(bytearray(b'
+# `rslt.data` contains the string "Wrapped BNB" encoded according to the
+# Solidity ABI
+print(rslt.data)
+
+# prints:
+# bytearray(b'
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0b
 # Wrapped BNB\x00\x00\x00\x00\x00
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
-# '))
-#
-# `chain2` contains the new state of the blockchain after a successful
+# ')
+
+# `rslt.chain` contains the new state of the blockchain after a successful
 # execution of a contract. In this case, given that the method `name()` is
-# read-only, `chain2` will be equivalent to `chain`.
-#
-# Finally, `trace` contains the trace of the contract execution.
-print(len(trace))
-# 228
-for op in trace:
+# read-only, `rslt.chain` will be equivalent to `chain`.
+
+# Finally, `rslt.trace` contains the trace of the contract execution.
+print(len(rslt.trace))  # prints "228"
+
+for op in rslt.trace:
     print(op)
 
+# prints:
 # 0x60 push1() -> 0x60
 # 0x60 push1() -> 0x40
 # 0x52 mstore(0x40, 0x60)
@@ -88,7 +91,7 @@ for op in trace:
 # 0x03 sub(0x100, 0xa0) -> 0x60
 # 0x90 swap1()
 # 0xf3 op_return(0xa0, 0x60)
-#
+
 # In this case there are no external calls to other contracts, but if there are
 # such calls, their traces also get recorded.
 ```
@@ -122,15 +125,13 @@ def name() -> string:
 # A wrapped function accepts a partial call to `execute()` as the first
 # parameter, and the remaining parameters are simply the parameters for the
 # Solidity function, in this case none. 
-result, chain2, trace = name(
+rslt = name(
     lambda data: execute(chain, caller, wbnb, 0, data, trace=True),
 )
-
-print(result)
-# Wrapped BNB
+print(rslt.value)  # prints "Wrapped BNB"
 
 # To simplify making a partiall call to `execute()` there is also `mkcall()`:
-result, chain2, trace = name(
+rslt = name(
     mkcall(chain, caller, wbnb, 0, trace=True),
 )
 ```
@@ -215,41 +216,41 @@ chain[holder].balance = (1 << 256) - 1
 
 ## Deposit 100 BNB to WBNB
 amount = 100_000000000000000000
-_, ch2, _ = deposit(
+rslt1 = deposit(
     mkcall(chain, holder, wbnb, amount),
 )
 
 ## Check that the deposit operation was successful
-x, _, _ = balanceOf(
-    mkcall(ch2, holder, wbnb, 0),
+x = balanceOf(
+    mkcall(rslt1.chain, holder, wbnb, 0),
     address = holder,
-)
+).value
 print(f'WBNB balance: {x/10**18}')
 
 ## Get reserves
-(reserve0, reserve1, timestamp), _, _ = getReserves(
-    mkcall(ch2, holder, uniswap, 0)
-)
+reserve0, reserve1, timestamp = getReserves(
+    mkcall(rslt1.chain, holder, uniswap, 0)
+).value
 
 ## Estimate amount to be received
-x, _, _ = getAmountOut(
-    mkcall(ch2, holder, router, 0),
+x = getAmountOut(
+    mkcall(rslt1.chain, holder, router, 0),
     amountIn = amount,
     reserveIn = reserve0,
     reserveOut = reserve1,
-)
+).value
 print(f'BUSD amount out: {x/10**18}')
 
 ## Approve withdrawl of 100 WBNB
-_, ch3, _ = approve(
-    mkcall(ch2, holder, wbnb, 0),
+rslt2 = approve(
+    mkcall(rslt1.chain, holder, wbnb, 0),
     guy = router,
     wad = amount,
 )
 
 ## Exchange 100 WBNB to BUSD
-_, ch4, trace = swapExactTokensForTokens(
-    mkcall(ch3, holder, router, 0, trace=True),
+rslt3 = swapExactTokensForTokens(
+    mkcall(rslt2.chain, holder, router, 0, trace=True),
     amountIn = amount,
     amountOutMin = 0,
     path = [wbnb, busd],
@@ -259,20 +260,20 @@ _, ch4, trace = swapExactTokensForTokens(
 
 ## The trace is large (4,974 operations) so we save it to a file for viewing in
 ## an external editor
-save_trace(trace, 'swap.trace')
+save_trace(rslt3.trace, 'swap.trace')
 
 ## Check final WBNB balance
-x, _, _ = balanceOf(
-    mkcall(ch4, holder, wbnb, 0),
+x = balanceOf(
+    mkcall(rslt3.chain, holder, wbnb, 0),
     address = holder,
-)
+).value
 print(f'WBNB balance: {x/10**18}')
 
 ## Check final BUSD balance
-x, _, _ = balanceOf(
-    mkcall(ch4, holder, busd, 0),
+x = balanceOf(
+    mkcall(rslt3.chain, holder, busd, 0),
     address = holder,
-)
+).value
 print(f'BUSD balance: {x/10**18}')
 ```
 
