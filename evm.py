@@ -599,46 +599,42 @@ def jumpdest(s: Space, pc: Pc) -> None:
     pass
 
 
-def push(k: int) -> Any:
-    def push_k(s: Space, pc: Pc) -> None:
-        value = int.from_bytes(s.code[pc[0]:pc[0]+k], 'big')
-        if s.trace is not None:
-            s.trace.append(Operation(0x5f + k, f'push{k}', [], value))
-        s.stack.append(value)
-        pc[0] += k
-    return push_k
-
 # Register all push functions
 # 0x60 - 0x7F
+def push(k: int) -> Any:
+    def push_k(s: Space, pc: Pc) -> int:
+        value = int.from_bytes(s.code[pc[0]:pc[0]+k], 'big')
+        pc[0] += k
+        return value
+    push_k.__name__ = f'push{k}'
+    return push_k
+
 for i in range(32):
-    OPCODES[0x60+i] = push(i + 1)
+    register(0x60 + i)(push(i + 1))
 
-
-def dup(k: int) -> Any:
-    def dup_k(s: Space, pc: Pc) -> None:
-        value = s.stack[-k]
-        if s.trace is not None:
-            s.trace.append(Operation(0x7f + k, f'dup{k}', [], value))
-        s.stack.append(value)
-    return dup_k
 
 # Register all dup functions
 # 0x80 - 0x8F
+def dup(k: int) -> Any:
+    def dup_k(s: Space, pc: Pc) -> int:
+        return s.stack[-k]
+    dup_k.__name__ = f'dup{k}'
+    return dup_k
+
 for i in range(16):
-    OPCODES[0x80+i] = dup(i + 1)
+    register(0x80 + i)(dup(i + 1))
 
-
-def swap(k: int) -> Any:
-    def swap_k(s: Space, pc: Pc) -> None:
-        if s.trace is not None:
-            s.trace.append(Operation(0x8f + k, f'swap{k}', [], None))
-        s.stack[-1], s.stack[-k-1] = s.stack[-k-1], s.stack[-1]
-    return swap_k
 
 # Register all swap functions
 # 0x90 - 0x9F
+def swap(k: int) -> Any:
+    def swap_k(s: Space, pc: Pc) -> None:
+        s.stack[-1], s.stack[-k-1] = s.stack[-k-1], s.stack[-1]
+    swap_k.__name__ = f'swap{k}'
+    return swap_k
+
 for i in range(16):
-    OPCODES[0x90+i] = swap(i + 1)
+    register(0x90 + i)(swap(i + 1))
 
 
 @register(0xa0)
