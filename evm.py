@@ -165,7 +165,7 @@ class Operation:
     opcode: int
     name: str
     args: list[int]
-    rslt: None | int
+    rslt: None | int = None
 
     def __repr__(self) -> str:
         args = ', '.join(f'0x{a:x}' for a in self.args)
@@ -313,13 +313,17 @@ def register(opcode: int) -> Any:
         def wrapped(s, pc):
             args = [s.stack.pop() for _ in range(no_args)]
             if s.trace is not None:
-                trace = Operation(opcode, name, args, None)
-                s.trace.append(trace)
-            rslt = func(s, pc, *args)
-            if rslt is not None:
-                s.stack.append(rslt)
-            if s.trace is not None:
-                trace.rslt = rslt
+                # Record the trace before any external calls
+                op = Operation(opcode, name, args)
+                s.trace.append(op)
+            rslt = None
+            try:
+                rslt = func(s, pc, *args)
+                if rslt is not None:
+                    s.stack.append(rslt)
+            finally:
+                if s.trace is not None:
+                    op.rslt = rslt
         OPCODES[opcode] = wrapped
         return wrapped
     return wrapper
