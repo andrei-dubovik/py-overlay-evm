@@ -369,26 +369,31 @@ def stop(s: Space, pc: Pc) -> None:
 
 @register(0x1)
 def add(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return (a + b)%MOD
 
 
 @register(0x2)
 def mul(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 5
     return (a*b)%MOD
 
 
 @register(0x3)
 def sub(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return (a - b)%MOD
 
 
 @register(0x4)
 def div(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 5
     return a//b
 
 
 @register(0x5)
 def sdiv(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 5
     a = sint(a)
     b = sint(b)
     if a >= 0:
@@ -406,11 +411,13 @@ def sdiv(s: Space, pc: Pc, a: int, b: int) -> int:
 
 @register(0x6)
 def mod(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 5
     return a%b
 
 
 @register(0x7)
 def smod(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 5
     a = sint(a)
     b = sint(b)
     return uint(abs(a)%abs(b)*(1 if a >= 0 else -1))
@@ -418,11 +425,13 @@ def smod(s: Space, pc: Pc, a: int, b: int) -> int:
 
 @register(0x8)
 def addmod(s: Space, pc: Pc, a: int, b: int, N: int) -> int:
+    s.gas -= 8
     return (a + b)%N
 
 
 @register(0x9)
 def mulmod(s: Space, pc: Pc, a: int, b: int, N: int) -> int:
+    s.gas -= 8
     return (a*b)%N
 
 
@@ -433,6 +442,7 @@ def exp(s: Space, pc: Pc, a: int, b: int) -> int:
 
 @register(0xb)
 def signextend(s: Space, pc: Pc, b: int, x: int) -> int:
+    s.gas -= 5
     size = 8*(b + 1)
     x &= (1 << size) - 1
     if x >> size - 1 == 0:
@@ -443,51 +453,61 @@ def signextend(s: Space, pc: Pc, b: int, x: int) -> int:
 
 @register(0x10)
 def lt(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return int(a < b)
 
 
 @register(0x11)
 def gt(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return int(a > b)
 
 
 @register(0x12)
 def slt(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return int(sint(a) < sint(b))
 
 
 @register(0x13)
 def sgt(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return int(sint(a) > sint(b))
 
 
 @register(0x14)
 def equal(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return int(a == b)
 
 
 @register(0x15)
 def iszero(s: Space, pc: Pc, a: int) -> int:
+    s.gas -= 3
     return int(a == 0)
 
 
 @register(0x16)
 def bitwise_and(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return a & b
 
 
 @register(0x17)
 def bitwise_or(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return a | b
 
 
 @register(0x18)
 def bitwise_xor(s: Space, pc: Pc, a: int, b: int) -> int:
+    s.gas -= 3
     return a ^ b
 
 
 @register(0x19)
 def bitwise_not(s: Space, pc: Pc, a: int) -> int:
+    s.gas -= 3
     return a ^ (MOD - 1)
 
 
@@ -499,16 +519,19 @@ def sha3(s: Space, pc: Pc, offset: int, length: int) -> int:
 
 @register(0x1b)
 def shl(s: Space, pc: Pc, shift: int, value: int) -> int:
+    s.gas -= 3
     return (value << shift)%MOD
 
 
 @register(0x1c)
 def shr(s: Space, pc: Pc, shift: int, value: int) -> int:
+    s.gas -= 3
     return value >> shift
 
 
 @register(0x1d)
 def sar(s: Space, pc: Pc, shift: int, value: int) -> int:
+    s.gas -= 3
     if value >> 255 == 0:
         return value >> shift
     else:
@@ -517,6 +540,7 @@ def sar(s: Space, pc: Pc, shift: int, value: int) -> int:
 
 @register(0x30)
 def address(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return s.address
 
 
@@ -527,16 +551,19 @@ def balance(s: Space, pc: Pc, address: int) -> int:
 
 @register(0x33)
 def caller(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return s.msg['caller']
 
 
 @register(0x34)
 def callvalue(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return s.msg['value']
 
 
 @register(0x35)
 def calldataload(s: Space, pc: Pc, offset: int) -> int:
+    s.gas -= 3
     word = s.msg['data'][offset:offset+32]
     word += bytes(32 - len(word))  # Short data are padded on the right
     return int.from_bytes(word, 'big')
@@ -544,6 +571,7 @@ def calldataload(s: Space, pc: Pc, offset: int) -> int:
 
 @register(0x36)
 def calldatasize(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return len(s.msg['data'])
 
 
@@ -565,6 +593,7 @@ def extcodesize(s: Space, pc: Pc, addr: int) -> int:
 
 @register(0x3d)
 def returndatasize(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return len(s.returndata)
 
 
@@ -575,16 +604,19 @@ def returndatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int)
 
 @register(0x42)
 def timestamp(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return s.chain.node.block_timestamp()
 
 
 @register(0x47)
 def selfbalance(s: Space, pc: Pc) -> int:
+    s.gas -= 5
     return s.chain[s.address].balance
 
 
 @register(0x50)
 def pop(s: Space, pc: Pc, _: int) -> None:
+    s.gas -= 2
     pass
 
 
@@ -617,22 +649,26 @@ def sstore(s: Space, pc: Pc, key: int, value: int) -> None:
 
 @register(0x56)
 def jump(s: Space, pc: Pc, dest: int) -> None:
+    s.gas -= 8
     pc[0] = dest
 
 
 @register(0x57)
 def jumpi(s: Space, pc: Pc, dest: int, cond: int) -> None:
+    s.gas -= 10
     if cond != 0:
         pc[0] = dest
 
 
 @register(0x5a)
 def gas(s: Space, pc: Pc) -> int:
+    s.gas -= 2
     return s.gas
 
 
 @register(0x5b)
 def jumpdest(s: Space, pc: Pc) -> None:
+    s.gas -= 1
     pass
 
 
@@ -640,6 +676,7 @@ def jumpdest(s: Space, pc: Pc) -> None:
 # 0x60 - 0x7F
 def push(k: int) -> Any:
     def push_k(s: Space, pc: Pc) -> int:
+        s.gas -= 3
         value = int.from_bytes(s.code[pc[0]:pc[0]+k], 'big')
         pc[0] += k
         return value
@@ -654,6 +691,7 @@ for i in range(32):
 # 0x80 - 0x8F
 def dup(k: int) -> Any:
     def dup_k(s: Space, pc: Pc) -> int:
+        s.gas -= 3
         return s.stack[-k]
     dup_k.__name__ = f'dup{k}'
     return dup_k
@@ -666,6 +704,7 @@ for i in range(16):
 # 0x90 - 0x9F
 def swap(k: int) -> Any:
     def swap_k(s: Space, pc: Pc) -> None:
+        s.gas -= 3
         s.stack[-1], s.stack[-k-1] = s.stack[-k-1], s.stack[-1]
     swap_k.__name__ = f'swap{k}'
     return swap_k
