@@ -342,10 +342,11 @@ class CallResult(evm.CallResult):
 
     def __repr__(self) -> str:
         """Pretty-print the object for interactive debugging."""
-        return 'CallResult(%s, %s, %s, %s)' % (
+        return 'CallResult(%s, %s, %s, %s, %s)' % (
             'signal=%s(...)' % type(self.signal).__name__,
             'value=%s' % repr(self.value),
             'chain=...',
+            'gas=%i' % self.gas,
             'trace=%s' % ('None' if self.trace is None else '[...]'),
         )
 
@@ -371,5 +372,5 @@ def solidity(func: Callable) -> Callable:
         else:
             # Unwrap single-valued tuples
             value = decode(tuple[rtype], rslt.data)[0]
-        return CallResult(rslt.signal, rslt.chain, rslt.trace, value)
+        return CallResult(rslt.signal, rslt.chain, rslt.gas, rslt.trace, value)
     return wrapped

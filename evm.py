@@ -34,6 +34,13 @@ class InsufficientFunds(Signal):
         return 0
 
 
+class InsufficientGas(Signal):
+    """An execution failed due to exhausted gas."""
+
+    def __int__(self) -> int:
+        return 0
+
+
 class Stop(Signal):
     """A contract stopped normally without returning any data."""
 
@@ -89,7 +96,7 @@ class Storage:
         return s
 
 
-class Balance:
+class FundsBalance:
     """A funds balance on a smart contract."""
 
     def __get__(self, obj: Any, _: Any) -> int:
@@ -108,7 +115,7 @@ class Contract:
     address: int
     code: bytes
     storage: Storage
-    balance: Balance = Balance()
+    balance: FundsBalance = FundsBalance()
 
     def clone(self) -> "Contract":
         """Make a clone with own storage."""
@@ -166,14 +173,29 @@ class Operation:
     name: str
     args: list[int]
     rslt: None | int = None
+    gas: int = 0
 
     def __repr__(self) -> str:
         args = ', '.join(f'0x{a:x}' for a in self.args)
         rslt = '' if self.rslt is None else f' -> 0x{self.rslt:x}'
-        return f'0x{self.opcode:02x} {self.name}({args}){rslt}'
+        gas = f', gas: {self.gas}'
+        return f'0x{self.opcode:02x} {self.name}({args}){rslt}{gas}'
 
 
 Trace = None | list[Union[Operation, 'Trace']]
+
+
+class GasBalance:
+    """An ongoing gas balance."""
+
+    def __get__(self, obj: Any, _: Any) -> int:
+        return 0 if obj is None else obj._gas
+
+    def __set__(self, obj: Any, value: int) -> None:
+        obj._gas = value
+        if value < 0:
+            raise InsufficientGas()
+
 
 @dataclass
 class Space:
@@ -187,6 +209,7 @@ class Space:
     memory: bytearray  # big endian
     returndata: bytes
     trace: Trace
+    gas: GasBalance = GasBalance()
 
 
 @dataclass
@@ -195,6 +218,7 @@ class CallResult(BaseException):
 
     signal: Signal
     chain: Chain
+    gas: int
     trace: Trace
 
     @property
@@ -206,10 +230,11 @@ class CallResult(BaseException):
 
     def __repr__(self) -> str:
         """Pretty-print the object for interactive debugging."""
-        return 'CallResult(%s, %s, %s, %s)' % (
+        return 'CallResult(%s, %s, %s, %s, %s)' % (
             'signal=%s(...)' % type(self.signal).__name__,
             'data=%s' % repr(self.data),
             'chain=...',
+            'gas=%i' % self.gas,
             'trace=%s' % ('None' if self.trace is None else '[...]'),
         )
 
@@ -259,6 +284,7 @@ def execute(
         address: int,
         value: int,
         data: bytes,
+        gas: int = MOD - 1,  # largest u256
         static = False,
         trace = False,
     ) -> CallResult:
@@ -277,7 +303,8 @@ def execute(
         stack = [],
         memory = bytearray(),
         returndata = bytes(),
-        trace = [] if trace else None
+        trace = [] if trace else None,
+        gas = gas,
     )
     pc = [0]
     try:
@@ -287,10 +314,11 @@ def execute(
             pc[0] += 1
             OPCODES[opcode](space, pc)
     except Signal as signal:
+        gas -= space.gas
         if int(signal) == 0:
-            raise CallResult(signal, chain, space.trace) from None
+            raise CallResult(signal, chain, gas, space.trace) from None
         else:
-            return CallResult(signal, space.chain, space.trace)
+            return CallResult(signal, space.chain, gas, space.trace)
 
 
 def mkcall(
@@ -298,11 +326,14 @@ def mkcall(
         caller: int,
         address: int,
         value: int,
+        gas: int = MOD - 1,  # largest u256
         static=False,
         trace=False,
     ) -> Callable[[bytes], CallResult]:
     """Prepare a call that accepts arbibrary data."""
-    return lambda data: execute(chain, caller, address, value, data, static, trace)
+    return lambda data: execute(
+        chain, caller, address, value, data, gas, static, trace
+    )
 
 
 def register(opcode: int) -> Any:
@@ -317,6 +348,7 @@ def register(opcode: int) -> Any:
                 op = Operation(opcode, name, args)
                 s.trace.append(op)
             rslt = None
+            gas = s.gas
             try:
                 rslt = func(s, pc, *args)
                 if rslt is not None:
@@ -324,6 +356,7 @@ def register(opcode: int) -> Any:
             finally:
                 if s.trace is not None:
                     op.rslt = rslt
+                    op.gas = gas - s.gas
         OPCODES[opcode] = wrapped
         return wrapped
     return wrapper
@@ -595,7 +628,7 @@ def jumpi(s: Space, pc: Pc, dest: int, cond: int) -> None:
 
 @register(0x5a)
 def gas(s: Space, pc: Pc) -> int:
-    return MOD - 1  # Dummy number (max u256)
+    return s.gas
 
 
 @register(0x5b)
@@ -721,13 +754,21 @@ def generic_call(
     data = s.memory[args_offset:args_offset+args_length]
     try:
         rslt = execute(
-            s.chain, s.address, addr, value, data, static, s.trace is not None,
+            chain = s.chain,
+            caller = s.address,
+            address = addr,
+            value = value,
+            data = data,
+            gas = gas,
+            static = static,
+            trace = s.trace is not None,
         )
     except CallResult as err:
         rslt = err
     memcpy(s.memory, rslt.data, ret_offset, 0, ret_length)
     s.returndata = rslt.data
     s.chain = rslt.chain
+    s.gas -= rslt.gas
     if s.trace is not None:
         s.trace.append(rslt.trace)
     return int(rslt)
