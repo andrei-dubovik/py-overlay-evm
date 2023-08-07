@@ -278,6 +278,12 @@ def memcpy(
     dst[dst_offset:dst_offset+size] = data
 
 
+def intrinsic_gas(data: bytes) -> int:
+    """Calculate fixed gas costs per transaction."""
+    nb = sum(b == 0 for b in data)
+    return 21_000 + 4*nb + 16*(len(data) - nb)
+
+
 def execute(
         chain: Chain,
         caller: int,
@@ -287,6 +293,7 @@ def execute(
         gas: int = MOD - 1,  # largest u256
         static = False,
         trace = False,
+        init = True,
     ) -> CallResult:
     """Run an Ethereum contract in a virtual machine."""
     contract = chain[address]
@@ -309,6 +316,8 @@ def execute(
     pc = [0]
     try:
         space.chain.transfer(caller, address, value)
+        if init:
+            space.gas -= intrinsic_gas(data)
         while True:
             opcode = contract.code[pc[0]]
             pc[0] += 1
@@ -801,6 +810,7 @@ def generic_call(
             gas = gas,
             static = static,
             trace = s.trace is not None,
+            init = False,
         )
     except CallResult as err:
         rslt = err
