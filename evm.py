@@ -2,7 +2,7 @@
 
 # Load standard packages
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Union
 
 # Load local packages
@@ -197,6 +197,65 @@ class GasBalance:
             raise InsufficientGas()
 
 
+def memory_cost(size: int) -> int:
+    """Compute the gas costs for a given memory usage."""
+    words = (size + 31)//32
+    return words**2//512 + 3*words
+
+
+class Memory:
+    """An interface to manage the runtime memory of a smart contract."""
+
+    def __init__(self, space: 'Space') -> None:
+        """Allocate an interface and link it to a specific runtime."""
+        self.space = space
+
+    def __getitem__(self, key: slice) -> bytes:
+        """Get memory for a given address range."""
+        key = self.specialize(key)
+        if key.start == key.stop:
+            return b''
+        self.resize(key.stop)
+        return self.space._memory[key]
+
+    def __setitem__(self, key: slice, value: bytes) -> None:
+        """Set memory at a given address range."""
+        key = self.specialize(key)
+        size = key.stop - key.start
+        if size == 0:
+            return
+        if size < len(value):
+            raise RuntimeError('Data exceeds the destination memory range')
+        if (n := size - len(value)) > 0:
+            # Pad short data on the right
+            value = value + bytes(n)
+        self.resize(key.stop)
+        self.space._memory[key] = value
+
+    def specialize(self, key: slice) -> slice:
+        """Specialize a partial slice."""
+        key = slice(
+            key.start or 0,
+            key.stop or len(self.space._memory),
+            key.step or 1,
+        )
+        # Flexible slices are not needed and are likely an error indication
+        if key.step != 1:
+            raise RuntimeError('Non-contiguous slices are not supported')
+        if key.start < 0 or key.stop < 0:
+            raise RuntimeError('Negative slice bounds are not supported')
+        if key.start > key.stop:
+            raise RuntimeError('Right-to-left slices are not supported')
+        return key
+
+    def resize(self, size: int) -> None:
+        """Resize the underlying buffer when necessary, do gas accounting."""
+        size0 = len(self.space._memory)
+        if size > size0:
+            self.space.gas -= memory_cost(size) - memory_cost(size0)
+            self.space._memory.extend(bytearray(size - size0))
+
+
 @dataclass
 class Space:
     """Runtime environment for a smart contract."""
@@ -206,10 +265,15 @@ class Space:
     code: bytes
     msg: dict
     stack: list[int]
-    memory: bytearray  # big endian
     returndata: bytes
     trace: Trace
     gas: GasBalance = GasBalance()
+
+    _memory: bytearray = field(default_factory=bytearray)  # big endian
+
+    @property
+    def memory(self) -> Memory:
+        return Memory(self)
 
 
 @dataclass
@@ -258,26 +322,6 @@ def cmpl(size: int) -> int:
     return (1 << size) - 1 << 256 - size
 
 
-def memcpy(
-        dst: bytearray,
-        src: bytes,
-        dst_offset: int,
-        src_offset: int,
-        size: int,
-    ) -> None:
-    """Copy bytes from src to dst."""
-    # Pad short data on the right
-    data = src[src_offset:src_offset+size]
-    if (n := size - len(data)) > 0:
-        data += bytes(n)
-
-    # Expand src if necessary
-    if (n := dst_offset + size - len(dst)) > 0:
-        dst.extend(bytes(n))
-
-    dst[dst_offset:dst_offset+size] = data
-
-
 def intrinsic_gas(data: bytes) -> int:
     """Calculate fixed gas costs per transaction."""
     nb = sum(b == 0 for b in data)
@@ -308,7 +352,6 @@ def execute(
             'static': static,
         },
         stack = [],
-        memory = bytearray(),
         returndata = bytes(),
         trace = [] if trace else None,
         gas = gas,
@@ -586,12 +629,12 @@ def calldatasize(s: Space, pc: Pc) -> int:
 
 @register(0x37)
 def calldatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
-    memcpy(s.memory, s.msg['data'], dest_offset, offset, length)
+    s.memory[dest_offset:dest_offset+length] = s.msg['data'][offset:offset+length]
 
 
 @register(0x39)
 def codecopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
-    memcpy(s.memory, s.code, dest_offset, offset, length)
+    s.memory[dest_offset:dest_offset+length] = s.code[offset:offset+length]
 
 
 @register(0x3b)
@@ -608,7 +651,7 @@ def returndatasize(s: Space, pc: Pc) -> int:
 
 @register(0x3e)
 def returndatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
-    memcpy(s.memory, s.returndata, dest_offset, offset, length)
+    s.memory[dest_offset:dest_offset+length] = s.returndata[offset:offset+length]
 
 
 @register(0x42)
@@ -637,8 +680,6 @@ def mload(s: Space, pc: Pc, offset: int) -> int:
 
 @register(0x52)
 def mstore(s: Space, pc: Pc, offset: int, value: int) -> None:
-    if (n := offset + 32 - len(s.memory)) > 0:
-        s.memory.extend(bytearray(n))
     s.memory[offset:offset+32] = value.to_bytes(32, 'big')
 
 
@@ -814,7 +855,7 @@ def generic_call(
         )
     except CallResult as err:
         rslt = err
-    memcpy(s.memory, rslt.data, ret_offset, 0, ret_length)
+    s.memory[ret_offset:ret_offset+ret_length] = rslt.data[:ret_length]
     s.returndata = rslt.data
     s.chain = rslt.chain
     s.gas -= rslt.gas
