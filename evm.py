@@ -674,12 +674,14 @@ def pop(s: Space, pc: Pc, _: int) -> None:
 
 @register(0x51)
 def mload(s: Space, pc: Pc, offset: int) -> int:
+    s.gas -= 3
     word = s.memory[offset:offset+32]
     return int.from_bytes(word, 'big')
 
 
 @register(0x52)
 def mstore(s: Space, pc: Pc, offset: int, value: int) -> None:
+    s.gas -= 3
     s.memory[offset:offset+32] = value.to_bytes(32, 'big')
 
 
