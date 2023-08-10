@@ -489,6 +489,8 @@ def mulmod(s: Space, pc: Pc, a: int, b: int, N: int) -> int:
 
 @register(0xa)
 def exp(s: Space, pc: Pc, a: int, b: int) -> int:
+    no_bytes = (b.bit_length() + 7)//8
+    s.gas -= 10 + 50*no_bytes
     return pow(a, b, MOD)
 
 
@@ -565,6 +567,8 @@ def bitwise_not(s: Space, pc: Pc, a: int) -> int:
 
 @register(0x20)
 def sha3(s: Space, pc: Pc, offset: int, length: int) -> int:
+    no_words = (length + 31)//32
+    s.gas -= 30 + 6*no_words
     hash = keccak(s.memory[offset:offset+length])
     return int.from_bytes(hash, 'big')
 
@@ -629,11 +633,15 @@ def calldatasize(s: Space, pc: Pc) -> int:
 
 @register(0x37)
 def calldatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
+    no_words = (length + 31)//32
+    s.gas -= 3 + 3*no_words
     s.memory[dest_offset:dest_offset+length] = s.msg['data'][offset:offset+length]
 
 
 @register(0x39)
 def codecopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
+    no_words = (length + 31)//32
+    s.gas -= 3 + 3*no_words
     s.memory[dest_offset:dest_offset+length] = s.code[offset:offset+length]
 
 
@@ -651,6 +659,8 @@ def returndatasize(s: Space, pc: Pc) -> int:
 
 @register(0x3e)
 def returndatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> None:
+    no_words = (length + 31)//32
+    s.gas -= 3 + 3*no_words
     s.memory[dest_offset:dest_offset+length] = s.returndata[offset:offset+length]
 
 
@@ -765,6 +775,12 @@ for i in range(16):
     register(0x90 + i)(swap(i + 1))
 
 
+def generic_log(s: Space, pc: Pc, offset: int, length: int, *topics: int) -> None:
+    s.gas -= 375*(len(topics) + 1) + 8*length
+    _ = s.memory[offset:offset+length]  # trigger memory expansion costs
+    # TODO: event handling
+
+
 @register(0xa0)
 def log0(
         s: Space,
@@ -772,8 +788,7 @@ def log0(
         offset: int,
         length: int,
     ) -> None:
-    # TODO: event handling
-    pass
+    generic_log(s, pc, offset, length)
 
 
 @register(0xa1)
@@ -784,8 +799,7 @@ def log1(
         length: int,
         topic0: int,
     ) -> None:
-    # TODO: event handling
-    pass
+    generic_log(s, pc, offset, length, topic0)
 
 
 @register(0xa2)
@@ -797,8 +811,7 @@ def log2(
         topic0: int,
         topic1: int,
     ) -> None:
-    # TODO: event handling
-    pass
+    generic_log(s, pc, offset, length, topic0, topic1)
 
 
 @register(0xa3)
@@ -811,8 +824,7 @@ def log3(
         topic1: int,
         topic2: int,
     ) -> None:
-    # TODO: event handling
-    pass
+    generic_log(s, pc, offset, length, topic0, topic1, topic2)
 
 
 @register(0xa4)
@@ -826,8 +838,7 @@ def log4(
         topic2: int,
         topic3: int,
     ) -> None:
-    # TODO: event handling
-    pass
+    generic_log(s, pc, offset, length, topic0, topic1, topic2, topic3)
 
 
 def generic_call(
