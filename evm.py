@@ -256,6 +256,13 @@ class Memory:
             self.space._memory.extend(bytearray(size - size0))
 
 
+# AccessSet contains either
+# - contract address: 0 or
+# - (contract address, storage key): initial value
+# records.
+AccessSet = dict[int | tuple[int, int], int]
+
+
 @dataclass
 class Space:
     """Runtime environment for a smart contract."""
@@ -267,6 +274,7 @@ class Space:
     stack: list[int]
     returndata: bytes
     trace: Trace
+    access_set: AccessSet
     gas: GasBalance = GasBalance()
 
     _memory: bytearray = field(default_factory=bytearray)  # big endian
@@ -275,6 +283,15 @@ class Space:
     def memory(self) -> Memory:
         return Memory(self)
 
+    def get_contract(self, address: int) -> Contract:
+        return self.chain[address]
+
+    def get_storage(self, key: int) -> int:
+        return self.chain[self.address].storage[key]
+
+    def set_storage(self, key: int, value: int) -> None:
+        self.chain[self.address].storage[key] = value
+
 
 @dataclass
 class CallResult(BaseException):
@@ -282,6 +299,7 @@ class CallResult(BaseException):
 
     signal: Signal
     chain: Chain
+    access_set: AccessSet
     gas: int
     trace: Trace
 
@@ -294,10 +312,11 @@ class CallResult(BaseException):
 
     def __repr__(self) -> str:
         """Pretty-print the object for interactive debugging."""
-        return 'CallResult(%s, %s, %s, %s, %s)' % (
+        return 'CallResult(%s, %s, %s, %s, %s, %s)' % (
             'signal=%s(...)' % type(self.signal).__name__,
             'data=%s' % repr(self.data),
             'chain=...',
+            'access_set=...',
             'gas=%i' % self.gas,
             'trace=%s' % ('None' if self.trace is None else '[...]'),
         )
@@ -338,6 +357,7 @@ def execute(
         static = False,
         trace = False,
         init = True,
+        access_set: AccessSet = {},
     ) -> CallResult:
     """Run an Ethereum contract in a virtual machine."""
     contract = chain[address]
@@ -354,12 +374,14 @@ def execute(
         stack = [],
         returndata = bytes(),
         trace = [] if trace else None,
+        access_set = access_set.copy(),
         gas = gas,
     )
     pc = [0]
     try:
         space.chain.transfer(caller, address, value)
         if init:
+            space.access_set.update({caller: 0, address: 0})
             space.gas -= intrinsic_gas(data)
         while True:
             opcode = contract.code[pc[0]]
@@ -368,9 +390,9 @@ def execute(
     except Signal as signal:
         gas -= space.gas
         if int(signal) == 0:
-            raise CallResult(signal, chain, gas, space.trace) from None
+            raise CallResult(signal, chain, access_set, gas, space.trace) from None
         else:
-            return CallResult(signal, space.chain, gas, space.trace)
+            return CallResult(signal, space.chain, space.access_set, gas, space.trace)
 
 
 def mkcall(
@@ -602,7 +624,7 @@ def address(s: Space, pc: Pc) -> int:
 
 @register(0x31)
 def balance(s: Space, pc: Pc, address: int) -> int:
-    return s.chain[address].balance
+    return s.get_contract(address).balance
 
 
 @register(0x33)
@@ -647,8 +669,7 @@ def codecopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -> No
 
 @register(0x3b)
 def extcodesize(s: Space, pc: Pc, addr: int) -> int:
-    contract = s.chain[addr]
-    return len(contract.code)
+    return len(s.get_contract(addr).code)
 
 
 @register(0x3d)
@@ -673,7 +694,7 @@ def timestamp(s: Space, pc: Pc) -> int:
 @register(0x47)
 def selfbalance(s: Space, pc: Pc) -> int:
     s.gas -= 5
-    return s.chain[s.address].balance
+    return s.chain[s.address].balance  # skips warm access costs
 
 
 @register(0x50)
@@ -697,16 +718,14 @@ def mstore(s: Space, pc: Pc, offset: int, value: int) -> None:
 
 @register(0x54)
 def sload(s: Space, pc: Pc, key: int) -> int:
-    storage = s.chain[s.address].storage
-    return storage[key]
+    return s.get_storage(key)
 
 
 @register(0x55)
 def sstore(s: Space, pc: Pc, key: int, value: int) -> None:
     if s.msg['static']:
         raise RuntimeError('Non-static method called from a static call')
-    storage = s.chain[s.address].storage
-    storage[key] = value
+    s.set_storage(key, value)
 
 
 @register(0x56)
@@ -865,12 +884,14 @@ def generic_call(
             static = static,
             trace = s.trace is not None,
             init = False,
+            access_set = s.access_set,
         )
     except CallResult as err:
         rslt = err
     s.memory[ret_offset:ret_offset+ret_length] = rslt.data[:ret_length]
     s.returndata = rslt.data
     s.chain = rslt.chain
+    s.access_set = rslt.access_set
     s.gas -= rslt.gas
     if s.trace is not None:
         s.trace.append(rslt.trace)
