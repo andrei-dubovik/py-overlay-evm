@@ -284,6 +284,11 @@ class Space:
         return Memory(self)
 
     def get_contract(self, address: int) -> Contract:
+        if address in self.access_set:
+            self.gas -= 100
+        else:
+            self.gas -= 2600
+            self.access_set[address] = 0
         return self.chain[address]
 
     def get_storage(self, key: int) -> int:
@@ -360,7 +365,7 @@ def execute(
         access_set: AccessSet = {},
     ) -> CallResult:
     """Run an Ethereum contract in a virtual machine."""
-    contract = chain[address]
+    contract = chain[address]  # access costs are incured in generic_call()
     space = Space(
         chain = chain.clone(),  # make a local clone for state reversal
         address = address,
@@ -872,6 +877,9 @@ def generic_call(
         ret_offset: int,
         ret_length: int,
     ) -> int:
+    _ = s.get_contract(addr)  # incure access costs
+    if value > 0:
+        s.gas -= 9000
     data = s.memory[args_offset:args_offset+args_length]
     try:
         rslt = execute(
