@@ -291,12 +291,6 @@ class Space:
             self.access_set[address] = 0
         return self.chain[address]
 
-    def get_storage(self, key: int) -> int:
-        return self.chain[self.address].storage[key]
-
-    def set_storage(self, key: int, value: int) -> None:
-        self.chain[self.address].storage[key] = value
-
 
 @dataclass
 class CallResult(BaseException):
@@ -723,14 +717,53 @@ def mstore(s: Space, pc: Pc, offset: int, value: int) -> None:
 
 @register(0x54)
 def sload(s: Space, pc: Pc, key: int) -> int:
-    return s.get_storage(key)
+    value = s.chain[s.address].storage[key]
+    if (s.address, key) in s.access_set:
+        s.gas -= 100
+    else:
+        s.gas -= 2_100
+        s.access_set[(s.address, key)] = value
+    return value
 
 
+# TODO:
+# - [ ] proper gas refunds
+# - [ ] restructure `if` clauses for better clarity
 @register(0x55)
 def sstore(s: Space, pc: Pc, key: int, value: int) -> None:
     if s.msg['static']:
         raise RuntimeError('Non-static method called from a static call')
-    s.set_storage(key, value)
+    cval = s.chain[s.address].storage[key]
+    if (s.address, key) not in s.access_set:
+        s.gas -= 2_100
+        s.access_set[(s.address, key)] = cval
+    ival = s.access_set[(s.address, key)]
+    if value == cval:
+        s.gas -= 100
+        return
+
+    # value != cval
+    if cval == ival:  # clean slot
+        if ival == 0:
+            s.gas -= 20_000
+        else:
+            s.gas -= 2_900
+            if value == 0:
+                s.gas += 4_800  # gas refund
+    else:  # dirty slot
+        s.gas -= 100
+        if ival != 0:
+            if cval == 0:
+                s.gas -= 4_800  # negative gas refund
+            elif value == 0:
+                s.gas += 4_800  # gas refund
+        if value == ival:
+            if ival == 0:
+                s.gas += 19_900  # gas refund
+            else:
+                s.gas += 2_800  # gas refund
+
+    s.chain[s.address].storage[key] = value
 
 
 @register(0x56)
