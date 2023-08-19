@@ -690,6 +690,12 @@ def timestamp(s: Space, pc: Pc) -> int:
     return s.chain.node.block_timestamp()
 
 
+@register(0x43)
+def number(s: Space, pc: Pc) -> int:
+    s.gas -= 2
+    return s.chain.node.eth_blockNumber()
+
+
 @register(0x47)
 def selfbalance(s: Space, pc: Pc) -> int:
     s.gas -= 5
