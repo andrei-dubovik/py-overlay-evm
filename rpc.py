@@ -24,14 +24,15 @@ class Node:
     query_id: int
     verbose: bool
 
-    def __init__(self, node: str, verbose=False) -> None:
+    def __init__(self, node: str, block: int = -1, verbose=False) -> None:
         """Initialize an interface to a Ethereum node, freeze block number."""
         self.node = node
         self.verbose = verbose
         self.query_id = 0
-        block = self.query('eth_getBlockByNumber', ['latest', False])
-        self.block = block['number']
-        self.timestamp = block['timestamp']
+        xblock = 'latest' if block == -1 else hex(block)
+        block_data = self.query('eth_getBlockByNumber', [xblock, False])
+        self.block = block_data['number']
+        self.timestamp = block_data['timestamp']
 
     def query(self, method: str, params: list[str|bool]) -> Any:
         """Run an arbitrary query, deserialize the result."""
