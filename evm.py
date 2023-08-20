@@ -346,6 +346,8 @@ def intrinsic_gas(data: bytes) -> int:
     return 21_000 + 4*nb + 16*(len(data) - nb)
 
 
+# TODO
+# - [ ] split the top-level functionality into a separate function
 def execute(
         chain: Chain,
         caller: int,
@@ -357,15 +359,21 @@ def execute(
         trace = False,
         init = True,
         access_set: AccessSet = {},
+        address_code: int = -1,
+        value_env: int = -1,
     ) -> CallResult:
     """Run an Ethereum contract in a virtual machine."""
-    contract = chain[address]  # access costs are incured in generic_call()
+    if address_code == -1:
+        address_code = address
+    if value_env == -1:
+        value_env = value
+    code = chain[address_code].code  # access costs are incured in generic_call()
     space = Space(
         chain = chain.clone(),  # make a local clone for state reversal
         address = address,
-        code = contract.code,
+        code = code,
         msg = {
-            'value': value,
+            'value': value_env,
             'data': data,
             'caller': caller,
             'static': static,
@@ -383,7 +391,7 @@ def execute(
             space.access_set.update({caller: 0, address: 0})
             space.gas -= intrinsic_gas(data)
         while True:
-            opcode = contract.code[pc[0]]
+            opcode = code[pc[0]]
             pc[0] += 1
             OPCODES[opcode](space, pc)
     except Signal as signal:
@@ -908,30 +916,35 @@ def generic_call(
         static: bool,
         s: Space,
         pc: Pc,
+        caller: int,
         gas: int,
-        addr: int,
-        value: int,
+        addr_account: int,
+        addr_code: int,
+        value_trf: int,
+        value_env: int,
         args_offset: int,
         args_length: int,
         ret_offset: int,
         ret_length: int,
     ) -> int:
-    _ = s.get_contract(addr)  # incure access costs
-    if value > 0:
+    _ = s.get_contract(addr_code)  # incure access costs
+    if value_trf > 0:
         s.gas -= 9000
     data = s.memory[args_offset:args_offset+args_length]
     try:
         rslt = execute(
             chain = s.chain,
-            caller = s.address,
-            address = addr,
-            value = value,
+            caller = caller,
+            address = addr_account,
+            value = value_trf,
             data = data,
             gas = gas,
             static = static,
             trace = s.trace is not None,
             init = False,
             access_set = s.access_set,
+            address_code = addr_code,
+            value_env = value_env,
         )
     except CallResult as err:
         rslt = err
@@ -960,14 +973,53 @@ def call(
     if s.msg['static'] and value != 0:
         raise RuntimeError('Non-static call from a static call')
     return generic_call(
-        s.msg['static'], s, pc,
-        gas, addr, value, args_offset, args_length, ret_offset, ret_length,
+        static = s.msg['static'],
+        s = s,
+        pc = pc,
+        caller = s.address,
+        gas = gas,
+        addr_account = addr,
+        addr_code = addr,
+        value_trf = value,
+        value_env = value,
+        args_offset = args_offset,
+        args_length = args_length,
+        ret_offset = ret_offset,
+        ret_length = ret_length,
     )
 
 
 @register(0xf3)
 def op_return(s: Space, pc: Pc, offset: int, length: int) -> None:
     raise Return(s.memory[offset:offset+length])
+
+
+@register(0xf4)
+def delegatecall(
+        s: Space,
+        pc: Pc,
+        gas: int,
+        addr: int,
+        args_offset: int,
+        args_length: int,
+        ret_offset: int,
+        ret_length: int,
+    ) -> int:
+    return generic_call(
+        static = s.msg['static'],
+        s = s,
+        pc = pc,
+        caller = s.msg['caller'],
+        gas = gas,
+        addr_account = s.address,
+        addr_code = addr,
+        value_trf = 0,
+        value_env = s.msg['value'],
+        args_offset = args_offset,
+        args_length = args_length,
+        ret_offset = ret_offset,
+        ret_length = ret_length,
+    )
 
 
 @register(0xfa)
@@ -982,8 +1034,19 @@ def staticcall(
         ret_length: int,
     ) -> int:
     return generic_call(
-        True, s, pc,
-        gas, addr, 0, args_offset, args_length, ret_offset, ret_length,
+        static = True,
+        s = s,
+        pc = pc,
+        caller = s.address,
+        gas = gas,
+        addr_account = addr,
+        addr_code = addr,
+        value_trf = 0,
+        value_env = 0,
+        args_offset = args_offset,
+        args_length = args_length,
+        ret_offset = ret_offset,
+        ret_length = ret_length,
     )
 
 
