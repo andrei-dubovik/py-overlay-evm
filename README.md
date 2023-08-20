@@ -4,7 +4,7 @@ Ethereum VM written in Python with minimal external dependencies and aimed at a 
 
 ## Rationale
 
-This project grew from what was essentially an exercise to understand how smart contracts work on the Ethereum blockchain and its clowns. One way to gain understanding is to program an EVM from scratch, without referencing existing code, and that is precisely what I did. The codebase includes an implementation for the Ethereum bytecodes, own Keccak-256 implementation, as well as a Solidity wrapper for conveniently calling functions in Solidity contracts.
+This project grew from what was essentially an exercise to understand how smart contracts work on the Ethereum blockchain and its clowns. One way to gain understanding is to program an EVM from scratch, without referencing existing code, and that is precisely what I did. The codebase includes an implementation for the Ethereum bytecodes, including the corresponding gas calculations, own Keccak-256 implementation, as well as a Solidity wrapper for conveniently calling functions in Solidity contracts.
 
 As of now, the implementation of the EVM is incomplete, and the API is still likely to change. I reckon the code is good enough to play around, but it is certainly not ready for production. (For one, there is zero test coverage.) See the examples below for what can be done now.
 
@@ -12,6 +12,7 @@ As of now, the implementation of the EVM is incomplete, and the API is still lik
 - *Minimal external dependencies:* numpy, requests.
 - *Functional style state changes:* each call to a smart contract returns a new view of the blockchain with the respective changes implemented, the initial view from which the call started remains available and unchanged.
 - *Overlay architecture:* data is read from the (public) node if these data has not been previously accessed, further reads are cached, and any changes are kept in an overlay in memory.
+- *Gas calculations:* gas usage is calculated exactly (work in progress).
 
 ## Examples
 The following examples all use the Binance chain.
@@ -72,6 +73,11 @@ print(rslt.data)
 # `rslt.chain` contains the new state of the blockchain after a successful
 # execution of a contract. In this case, given that the method `name()` is
 # read-only, `rslt.chain` will be equivalent to `chain`.
+
+# `rslt.gas` reports the exact gas used by the transaction. Please note that
+# gas calculations have not been extensively tested and could well be
+# erroneous.
+print(rslt.gas)  # prints "24174"
 
 # Finally, `rslt.trace` contains the trace of the contract execution.
 print(len(rslt.trace))  # prints "228"
@@ -280,7 +286,7 @@ print(f'BUSD balance: {x/10**18}')
 ## Roadmap
 
 In case I happen to have time to further work on this project, the overall roadmap is as follows:
-- [ ] Gas calculations
+- [x] Gas calculations
 - [ ] Full coverage of EVM bytecodes (possibly using stab implementations)
 - [ ] Tests for EVM bytecodes
 - [ ] Full coverage of Solidity datatypes
