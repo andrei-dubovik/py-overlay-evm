@@ -4,7 +4,7 @@ Ethereum VM written in Python with minimal external dependencies and aimed at a 
 
 ## Rationale
 
-This project grew from what was essentially an exercise to understand how smart contracts work on the Ethereum blockchain and its clowns. One way to gain understanding is to program an EVM from scratch, without referencing existing code, and that is precisely what I did. The codebase includes an implementation for the Ethereum bytecodes, including the corresponding gas calculations, own Keccak-256 implementation, as well as a Solidity wrapper for conveniently calling functions in Solidity contracts.
+This project grew from what was essentially an exercise to understand how smart contracts work on the Ethereum blockchain and its clones. One way to gain understanding is to program an EVM from scratch, without referencing existing code, and that is precisely what I did. The codebase includes an implementation for the Ethereum bytecodes, including the corresponding gas calculations, own Keccak-256 implementation, as well as a Solidity wrapper for conveniently calling functions in Solidity contracts.
 
 As of now, the implementation of the EVM is incomplete, and the API is still likely to change. I reckon the code is good enough to play around, but it is certainly not ready for production. (For one, there is zero test coverage.) See the examples below for what can be done now.
 
