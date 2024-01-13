@@ -43,7 +43,7 @@ class Node:
             'jsonrpc': '2.0',
             'method': method,
             'params': params,
-            'id': 5,
+            'id': self.query_id,
         }
         response = requests.post(self.node, json=payload)
         if response.status_code != 200:
