@@ -6,16 +6,16 @@ Ethereum VM written in Python with minimal external dependencies and aimed at a 
 
 This project grew from what was essentially an exercise to understand how smart contracts work on the Ethereum blockchain and its clones. One way to gain understanding is to program an EVM from scratch, without referencing existing code, and that is precisely what I did. The codebase includes an implementation for the Ethereum bytecodes, including the corresponding gas calculations, own Keccak-256 implementation, as well as a Solidity wrapper for conveniently calling functions in Solidity contracts.
 
-As of now, the implementation of the EVM is incomplete, and the API is still likely to change. I reckon the code is good enough to play around, but it is certainly not ready for production. (For one, there is zero test coverage.) See the examples below for what can be done now.
+As of now, the implementation of the EVM is incomplete, and the API is still likely to change. I reckon the code is good enough to play around with, but it is certainly not ready for production (for instance, there is zero test coverage). The examples below demonstrate what can be done now.
 
 ## Features
 - *Minimal external dependencies:* numpy, requests.
 - *Functional style state changes:* each call to a smart contract returns a new view of the blockchain with the respective changes implemented, the initial view from which the call started remains available and unchanged.
-- *Overlay architecture:* data is read from the (public) node if these data has not been previously accessed, further reads are cached, and any changes are kept in an overlay in memory.
+- *Overlay architecture:* data is read from the (public) node if these data have not been previously accessed, further reads are cached, and any changes are kept in an overlay in memory.
 - *Gas calculations:* gas usage is calculated exactly (work in progress).
 
 ## Examples
-The following examples all use the Binance chain.
+The following examples all use the Ethereum blockchain.
 
 ### Example I (manual contract calls)
 
@@ -31,13 +31,15 @@ from keccak import keccak
 # behaviour ensures consistency but it also means that all the subsequent
 # requests must be done within a short time interval, because public nodes do
 # not return data for somewhat older blocks.
-url = "https://bsc-dataseed1.binance.org/"
+#
+# For testing purposes, we can use the public nodes from the Flashbots project.
+url = "https://rpc.flashbots.net"
 chain = Chain(Node(url, verbose=True))
 
-# We consider a Wrapped BNB contract for this example
+# We consider a Wrapped Ether contract for this example
 #
 # Addresses are always encoded as integers.
-wbnb = int("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", 16)
+weth = int("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 16)
 
 # We will be calling the contract from a mock address
 caller = int("0xabababababababababababababababababababab", 16)
@@ -50,23 +52,23 @@ data = keccak(b'name()')[:4]
 rslt = execute(
     chain = chain,
     caller = caller,
-    address = wbnb,
+    address = weth,
     value = 0,
     data = data,
     trace = True,
 )
 
-# `rslt.data` contains the string "Wrapped BNB" encoded according to the
+# `rslt.data` contains the string "Wrapped Ether" encoded according to the
 # Solidity ABI
 print(rslt.data)
 
-# prints:
+# prints an equivalent of:
 # bytearray(b'
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
-# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0b
-# Wrapped BNB\x00\x00\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0d
+# Wrapped Ether\x00\x00\x00
 # \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
 # ')
 
@@ -86,17 +88,17 @@ for op in rslt.trace:
     print(op)
 
 # prints:
-# 0x60 push1() -> 0x60
-# 0x60 push1() -> 0x40
-# 0x52 mstore(0x40, 0x60)
-# 0x60 push1() -> 0x4
-# 0x36 calldatasize() -> 0x4
+# 0x60 push1() -> 0x60, gas: 3
+# 0x60 push1() -> 0x40, gas: 3
+# 0x52 mstore(0x40, 0x60), gas: 12
+# 0x60 push1() -> 0x4, gas: 3
+# 0x36 calldatasize() -> 0x4, gas: 2
 # ...
-# 0x80 dup1() -> 0xa0
-# 0x91 swap2()
-# 0x03 sub(0x100, 0xa0) -> 0x60
-# 0x90 swap1()
-# 0xf3 op_return(0xa0, 0x60)
+# 0x80 dup1() -> 0xa0, gas: 3
+# 0x91 swap2(), gas: 3
+# 0x03 sub(0x100, 0xa0) -> 0x60, gas: 3
+# 0x90 swap1(), gas: 3
+# 0xf3 op_return(0xa0, 0x60), gas: 0
 
 # In this case there are no external calls to other contracts, but if there are
 # such calls, their traces also get recorded.
@@ -112,11 +114,11 @@ from evm import Chain, execute, mkcall
 from solidity import solidity, string
 
 # Initialize a link to a public node
-url = "https://bsc-dataseed1.binance.org/"
+url = "https://rpc.flashbots.net"
 chain = Chain(Node(url, verbose=True))
 
-# We consider a Wrapped BNB contract for this example
-wbnb = int("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", 16)
+# We consider a Wrapped Ether contract for this example
+weth = int("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 16)
 
 # We will be calling the contract from a mock address
 caller = int("0xabababababababababababababababababababab", 16)
@@ -132,19 +134,19 @@ def name() -> string:
 # parameter, and the remaining parameters are simply the parameters for the
 # Solidity function, in this case none. 
 rslt = name(
-    lambda data: execute(chain, caller, wbnb, 0, data, trace=True),
+    lambda data: execute(chain, caller, weth, 0, data, trace=True),
 )
-print(rslt.value)  # prints "Wrapped BNB"
+print(rslt.value)  # prints "Wrapped Ether"
 
-# To simplify making a partiall call to `execute()` there is also `mkcall()`:
+# To simplify making a partial call to `execute()` there is also `mkcall()`:
 rslt = name(
-    mkcall(chain, caller, wbnb, 0, trace=True),
+    mkcall(chain, caller, weth, 0, trace=True),
 )
 ```
 
 ### Example III (Uniswap V2 router)
 
-This is a longer example that walks through a non-trivial operation, namely depositing mock WBNB coins to a mock account, and then changing them into BUSD coins via a Uniswap V2 router. This example also demonstrates more extensive usage of the Solidity wrapper.
+This is a longer example that walks through a non-trivial operation, namely depositing mock WETH coins to a mock account, and then changing them into USDT coins via a Uniswap V2 router. This example also demonstrates more extensive usage of the Solidity wrapper.
 
 ```python
 from evm import Chain, mkcall, save_trace
@@ -153,7 +155,7 @@ from solidity import solidity, address
 from solidity import uint32, uint112, uint256
 
 
-# Firstly, we define all the Solidity function that we will need
+## Firstly, we define all the Solidity function that we will need
 
 @solidity
 def deposit():
@@ -198,98 +200,100 @@ def swapExactTokensForTokens(
     pass
 
 
-# Secondly, we define all the required addresses
+## Secondly, we define all the required addresses
 
-## Tokens
-wbnb = int("0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c", 16)
-busd = int("0xe9e7cea3dedca5984780bafc599bd69add087d56", 16)
+# Tokens
+weth = int("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 16)
+usdt = int("0xdac17f958d2ee523a2206206994597c13d831ec7", 16)
 
-## Pancake Uniswap V2
-uniswap = int("0x58f876857a02d6762e0101bb5c46a8c1ed44dc16", 16)
-router = int("0x10ed43c718714eb63d5aa57b78b54704e256024e", 16)
+# Uniswap V2 router and the WETH/USDT pool
+router = int("0x7a250d5630b4cf539739df2c5dacb4c659f2488d", 16)
+pool = int("0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852", 16)
 
-## Mock holder address
+# Mock holder address
 holder = int("0xabababababababababababababababababababab", 16)
 
-# Finally, we prepare mock WBNB and change them into BUSD
+## Finally, we prepare mock WETH and change them into USDT
 
-## Initialize a link to a public node
-url = "https://bsc-dataseed1.binance.org/"
+# Initialize a link to a public node
+url = "https://rpc.flashbots.net"
 chain = Chain(Node(url, verbose=True))
 
-## Create an unlimited supply of BNB at the mock address
+# Create an unlimited supply of ETH at the mock address :3
 chain[holder].balance = (1 << 256) - 1
 
-## Deposit 100 BNB to WBNB
-amount = 100_000000000000000000
+# Deposit 100 ETH to WETH
+amount = 100*10**18
 rslt1 = deposit(
-    mkcall(chain, holder, wbnb, amount),
+    mkcall(chain, holder, weth, amount),
 )
 
-## Check that the deposit operation was successful
+# Check that the deposit operation was successful
 x = balanceOf(
-    mkcall(rslt1.chain, holder, wbnb, 0),
+    mkcall(rslt1.chain, holder, weth, 0),
     address = holder,
 ).value
-print(f'WBNB balance: {x/10**18}')
+print(f'WETH balance: {x/10**18}')
 
-## Get reserves
+# Get reserves
 reserve0, reserve1, timestamp = getReserves(
-    mkcall(rslt1.chain, holder, uniswap, 0)
+    mkcall(rslt1.chain, holder, pool, 0)
 ).value
 
-## Estimate amount to be received
+# Estimate amount to be received
 x = getAmountOut(
     mkcall(rslt1.chain, holder, router, 0),
     amountIn = amount,
     reserveIn = reserve0,
     reserveOut = reserve1,
 ).value
-print(f'BUSD amount out: {x/10**18}')
+print(f'USDT amount out: {x/10**6:.2f}')
+# prints "251777.88" at the time or writing
 
-## Approve withdrawl of 100 WBNB
+# Approve withdrawal of 100 WETH
 rslt2 = approve(
-    mkcall(rslt1.chain, holder, wbnb, 0),
+    mkcall(rslt1.chain, holder, weth, 0),
     guy = router,
     wad = amount,
 )
 
-## Exchange 100 WBNB to BUSD
+# Exchange 100 WETH to USDT
 rslt3 = swapExactTokensForTokens(
     mkcall(rslt2.chain, holder, router, 0, trace=True),
     amountIn = amount,
     amountOutMin = 0,
-    path = [wbnb, busd],
+    path = [weth, usdt],
     to = holder,
     deadline = timestamp + 60,
 )
 
-## The trace is large (4,974 operations) so we save it to a file for viewing in
-## an external editor
+# The trace is large (4,820 operations) so we save it to a file for viewing in
+# an external editor
 save_trace(rslt3.trace, 'swap.trace')
 
-## Check final WBNB balance
+# Check final WETH balance
 x = balanceOf(
-    mkcall(rslt3.chain, holder, wbnb, 0),
+    mkcall(rslt3.chain, holder, weth, 0),
     address = holder,
 ).value
-print(f'WBNB balance: {x/10**18}')
+print(f'WETH balance: {x/10**18:.2f}')  # prints "0.00"
 
-## Check final BUSD balance
+# Check final USDT balance
 x = balanceOf(
-    mkcall(rslt3.chain, holder, busd, 0),
+    mkcall(rslt3.chain, holder, usdt, 0),
     address = holder,
 ).value
-print(f'BUSD balance: {x/10**18}')
+print(f'USDT balance: {x/10**6:.2f}')
+# prints "251777.88" at the time or writing
 ```
 
 ## Roadmap
 
 In case I happen to have time to further work on this project, the overall roadmap is as follows:
 - [x] Gas calculations
+- [ ] Python package
 - [ ] Full coverage of EVM bytecodes (possibly using stab implementations)
 - [ ] Tests for EVM bytecodes
 - [ ] Full coverage of Solidity datatypes
 - [ ] Tests for Solidity datatypes
-- [ ] Python package
 - [ ] Documentation
