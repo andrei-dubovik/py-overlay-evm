@@ -602,6 +602,12 @@ def sha3(s: Space, pc: Pc, offset: int, length: int) -> int:
     return int.from_bytes(hash, 'big')
 
 
+@register(0x1a)
+def byte(s: Space, pc: Pc, i: int, x: int) -> int:
+    s.gas -= 3
+    return (x >> (248 - i*8)) & 0xff
+
+
 @register(0x1b)
 def shl(s: Space, pc: Pc, shift: int, value: int) -> int:
     s.gas -= 3
@@ -665,6 +671,12 @@ def calldatacopy(s: Space, pc: Pc, dest_offset: int, offset: int, length: int) -
     no_words = (length + 31)//32
     s.gas -= 3 + 3*no_words
     s.memory[dest_offset:dest_offset+length] = s.msg['data'][offset:offset+length]
+
+
+@register(0x38)
+def codesize(s: Space, pc: Pc) -> int:
+    s.gas -= 2
+    return len(s.code)
 
 
 @register(0x39)
