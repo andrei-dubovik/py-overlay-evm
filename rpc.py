@@ -1,3 +1,5 @@
+# Copyright (c) 2023-2024, Andrey Dubovik <andrei@dubovik.eu>
+
 """Python wrappers around Ethereum JSON-RPC."""
 
 # Load standard packages

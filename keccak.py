@@ -1,3 +1,5 @@
+# Copyright (c) 2023-2024, Andrey Dubovik <andrei@dubovik.eu>
+
 """A NumPy-based implementation of Keccak-256."""
 
 import math

@@ -1,3 +1,5 @@
+# Copyright (c) 2023-2024, Andrey Dubovik <andrei@dubovik.eu>
+
 """Encoding and decoding functionality for Solidity ABI."""
 
 # Load standard packages

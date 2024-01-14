@@ -1,3 +1,5 @@
+# Copyright (c) 2023-2024, Andrey Dubovik <andrei@dubovik.eu>
+
 """An overlay Ethereum virtual machine."""
 
 # Load standard packages
