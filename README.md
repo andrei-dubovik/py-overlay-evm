@@ -144,42 +144,28 @@ rslt = name(
 )
 ```
 
-### Example III (Uniswap V2 router)
+### Example III (Uniswap V3 router)
 
-This is a longer example that walks through a non-trivial operation, namely depositing mock WETH coins to a mock account, and then changing them into USDT coins via a Uniswap V2 router. This example also demonstrates more extensive usage of the Solidity wrapper.
+This is a longer example that walks through a non-trivial operation, namely depositing mock WETH coins to a mock account, and then changing them into USDT coins via a Uniswap V3 router. This example also demonstrates more extensive usage of the Solidity wrapper.
 
 ```python
+from dataclasses import dataclass
+
 from evm import Chain, mkcall, save_trace
 from rpc import Node
 from solidity import solidity, address
-from solidity import uint32, uint112, uint256
+from solidity import uint24, uint160, uint256
 
 
-## Firstly, we define all the Solidity function that we will need
+## Firstly, we define all the Solidity functions that we will need
 
 @solidity
 def deposit():
     pass
 
-
 @solidity
 def balanceOf(address: address) -> uint256:
     pass
-
-
-@solidity
-def getReserves() -> tuple[uint112, uint112, uint32]:
-    pass
-
-
-@solidity
-def getAmountOut(
-    amountIn: uint256,
-    reserveIn: uint256,
-    reserveOut: uint256,
-) -> uint256:
-    pass
-
 
 @solidity
 def approve(
@@ -188,15 +174,22 @@ def approve(
 ) -> None:
     pass
 
+# A dataclass can be used if a Solidity function wants a structure as a
+# parameter. The dataclass can have an arbitrary name, because the name does
+# not form a part of the function's signature.
+@dataclass
+class SwapParams:
+    tokenIn:           address
+    tokenOut:          address
+    fee:               uint24
+    recipient:         address
+    deadline:          uint256
+    amountIn:          uint256
+    amountOutMinimum:  uint256
+    sqrtPriceLimitX96: uint160
 
 @solidity
-def swapExactTokensForTokens(
-    amountIn: uint256,
-    amountOutMin: uint256,
-    path: list[address],
-    to: address,
-    deadline: uint256,
-) -> None:
+def exactInputSingle(params: SwapParams) -> uint256:
     pass
 
 
@@ -206,9 +199,8 @@ def swapExactTokensForTokens(
 weth = int("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 16)
 usdt = int("0xdac17f958d2ee523a2206206994597c13d831ec7", 16)
 
-# Uniswap V2 router and the WETH/USDT pool
-router = int("0x7a250d5630b4cf539739df2c5dacb4c659f2488d", 16)
-pool = int("0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852", 16)
+# Uniswap V2 router
+router = int("0xe592427a0aece92de3edee1f18e0157c05861564", 16)
 
 # Mock holder address
 holder = int("0xabababababababababababababababababababab", 16)
@@ -235,21 +227,6 @@ x = balanceOf(
 ).value
 print(f'WETH balance: {x/10**18}')
 
-# Get reserves
-reserve0, reserve1, timestamp = getReserves(
-    mkcall(rslt1.chain, holder, pool, 0)
-).value
-
-# Estimate amount to be received
-x = getAmountOut(
-    mkcall(rslt1.chain, holder, router, 0),
-    amountIn = amount,
-    reserveIn = reserve0,
-    reserveOut = reserve1,
-).value
-print(f'USDT amount out: {x/10**6:.2f}')
-# prints "251777.88" at the time or writing
-
 # Approve withdrawal of 100 WETH
 rslt2 = approve(
     mkcall(rslt1.chain, holder, weth, 0),
@@ -257,18 +234,29 @@ rslt2 = approve(
     wad = amount,
 )
 
-# Exchange 100 WETH to USDT
-rslt3 = swapExactTokensForTokens(
-    mkcall(rslt2.chain, holder, router, 0, trace=True),
-    amountIn = amount,
-    amountOutMin = 0,
-    path = [weth, usdt],
-    to = holder,
-    deadline = timestamp + 60,
-)
+# We use the block's timestamp plus 60 seconds as a deadline
+deadline = chain.node.block_timestamp() + 60
 
-# The trace is large (4,820 operations) so we save it to a file for viewing in
-# an external editor
+# Exchange 100 WETH to USDT
+rslt3 = exactInputSingle(
+    mkcall(rslt2.chain, holder, router, 0, trace=True),
+    params = SwapParams(
+        tokenIn           = weth,
+        tokenOut          = usdt,
+        fee               = 500,  # 0.05%
+        recipient         = holder,
+        deadline          = deadline,
+        amountIn          = amount,
+        amountOutMinimum  = 0,
+        sqrtPriceLimitX96 = 0,
+    ),
+)
+print(f'USDT amount out: {rslt3.value/10**6:.2f}')
+# prints "USDT amount out: 256474.98" at the time or writing
+
+# The trace is large (8,402 operations at the time of writing, but that will
+# differ depending on how many ticks get traversed), so we save it to a file for
+# viewing in an external editor
 save_trace(rslt3.trace, 'swap.trace')
 
 # Check final WETH balance
@@ -284,7 +272,7 @@ x = balanceOf(
     address = holder,
 ).value
 print(f'USDT balance: {x/10**6:.2f}')
-# prints "251777.88" at the time or writing
+# prints "USDT balance: 256474.98" at the time or writing
 ```
 
 ## Roadmap
