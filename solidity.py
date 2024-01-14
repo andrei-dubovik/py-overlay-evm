@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from types import FunctionType
 from typing import Any, Generic, TypeVar
+import dataclasses
 import inspect
 import types
 import typing
@@ -36,10 +37,19 @@ class array:
 # Single dispatch is used to effectively be able to add methods to built-in
 # types such as a tuple
 
+class Dataclass:
+    """A class that denotes a dataclass."""
+
+    pass
+
+
 def fo_type(cls: Any) -> Any:
     """Determine the first-order type for a given type."""
     if type(cls) == type:
-        return cls
+        if dataclasses.is_dataclass(cls):
+            return Dataclass
+        else:
+            return cls
     else:
         t = typing.get_origin(cls)
         if t is None:
@@ -276,6 +286,34 @@ def _(cls: Any, value: bytes) -> tuple:
     return tuple(rslt)
 
 
+# Structure ( Dataclass === tuple )
+@signature.register(Dataclass)
+def _(cls: Any) -> bytes:
+    fields = dataclasses.fields(cls)
+    return signature(tuple[*(f.type for f in fields)])  # type: ignore
+
+
+@size.register(Dataclass)
+def _(cls: Any) -> int:
+    fields = dataclasses.fields(cls)
+    return size(tuple[*(f.type for f in fields)])  # type: ignore
+
+
+@encode.register(Dataclass)
+def _(_cls: Any, value: type) -> bytes:
+    fields = dataclasses.fields(value)
+    ncls = tuple[*(f.type for f in fields)]  # type: ignore
+    nval = tuple(getattr(value, f.name) for f in fields)
+    return encode(ncls, nval)
+
+
+@decode.register(Dataclass)
+def _(cls: Any, value: bytes) -> type:
+    fields = dataclasses.fields(cls)
+    ncls = tuple[*(f.type for f in fields)]  # type: ignore
+    return cls(*decode(ncls, value))
+
+
 # <type>[M] ( array(M)[type] )
 @signature.register(array)
 def _(cls: Any) -> str:
@@ -350,6 +388,7 @@ class CallResult(evm.CallResult):
             'gas=%i' % self.gas,
             'trace=%s' % ('None' if self.trace is None else '[...]'),
         )
+
 
 # Solidity wrapper
 def solidity(func: Callable) -> Callable:
