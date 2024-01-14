@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Union
 
 # Load local packages
-from keccak import keccak
-from rpc import Node
+from .keccak import keccak
+from .rpc import Node
 
 
 OPCODES: dict[int, Callable[..., int]] = {}

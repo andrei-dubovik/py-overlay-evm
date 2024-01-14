@@ -13,9 +13,9 @@ import types
 import typing
 
 # Load local packages
-from keccak import keccak
-from evm import sint, uint
-import evm
+from .keccak import keccak
+from .evm import CallResult as evm_CallResult
+from .evm import sint, uint
 
 # Define fixed generic arrays. This is done in a roundabout way as Python does
 # not support generic containers of fixed length out of the box.
@@ -375,7 +375,7 @@ def _(func: Callable) -> bytes:
 
 
 @dataclass
-class CallResult(evm.CallResult):
+class CallResult(evm_CallResult):
     """A full result of a contract call, including the new chain state."""
 
     value: Any

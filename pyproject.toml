@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py-overlay-evm"
+version = "0.1.0"
+dependencies = [
+  "numpy",
+  "requests",
+]
+authors = [
+  {name = "Andrei Dubovik", email = "andrei@dubovik.eu"},
+]
+description = "Ethereum VM aimed at a mock execution of smart contracts"
+readme = "README.md"
+keywords = [
+  "evm",
+  "ethereum virtual machine",
+  "smart contract",
+  "simulation",
+]
+classifiers = [
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+]
+
+[project.urls]
+Homepage = "https://github.com/andrei-dubovik/py-overlay-evm"
+Repository = "https://github.com/andrei-dubovik/py-overlay-evm.git"

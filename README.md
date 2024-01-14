@@ -20,9 +20,9 @@ The following examples all use the Ethereum blockchain.
 ### Example I (manual contract calls)
 
 ```python
-from rpc import Node
-from evm import Chain, execute
-from keccak import keccak
+from py_overlay_evm.rpc import Node
+from py_overlay_evm.evm import Chain, execute
+from py_overlay_evm.keccak import keccak
 
 # Initialize a link to a public node
 # 
@@ -109,9 +109,9 @@ for op in rslt.trace:
 For conveniently calling Solidity contracts, there is a wrapper that handles the encoding of the call signature as well as the translation of the data from Python types to Solidity binary format and back. Here, we repeat the first example but using the Solidity wrapper.
 
 ```python
-from rpc import Node
-from evm import Chain, execute, mkcall
-from solidity import solidity, string
+from py_overlay_evm.rpc import Node
+from py_overlay_evm.evm import Chain, execute, mkcall
+from py_overlay_evm.solidity import solidity, string
 
 # Initialize a link to a public node
 url = "https://rpc.flashbots.net"
@@ -151,10 +151,10 @@ This is a longer example that walks through a non-trivial operation, namely depo
 ```python
 from dataclasses import dataclass
 
-from evm import Chain, mkcall, save_trace
-from rpc import Node
-from solidity import solidity, address
-from solidity import uint24, uint160, uint256
+from py_overlay_evm.evm import Chain, mkcall, save_trace
+from py_overlay_evm.rpc import Node
+from py_overlay_evm.solidity import solidity, address
+from py_overlay_evm.solidity import uint24, uint160, uint256
 
 
 ## Firstly, we define all the Solidity functions that we will need
@@ -279,8 +279,8 @@ print(f'USDT balance: {x/10**6:.2f}')
 
 In case I happen to have time to further work on this project, the overall roadmap is as follows:
 - [x] Gas calculations
-- [ ] Python package
-- [ ] Full coverage of EVM bytecodes (possibly using stab implementations)
+- [x] Python package
+- [ ] Full coverage of EVM bytecodes
 - [ ] Tests for EVM bytecodes
 - [ ] Full coverage of Solidity datatypes
 - [ ] Tests for Solidity datatypes
